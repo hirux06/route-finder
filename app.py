@@ -4,7 +4,7 @@ import heapq
 
 app = Flask(__name__)
 
-MAPBOX_ACCESS_TOKEN = 'pk.eyJ1IjoiaXRzc2FyYW5oZXJlIiwiYSI6ImNtMmxucWl3ZTBjeGQycXNnZjV1dmZxeTEifQ.otCT7alqAGTe8l6l0fjGKQ'
+MAPBOX_ACCESS_TOKEN = '<ENTER YOUR MAPBOX API TOKEN HERE>/<WRITE IN A ENV FILE AND ACCESS HERE>'
 
 
 def dijkstra(graph, start, end):
