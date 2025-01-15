@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Shortest Route Finder with Toll Information</title>
+    <link href="https://api.mapbox.com/mapbox-gl-js/v2.9.1/mapbox-gl.css" rel="stylesheet" />
+    <style>
+        body { 
+            font-family: Arial, sans-serif; 
+            margin: 0; 
+            padding: 0; 
+            background: linear-gradient(to bottom right, #f0f8ff, #e0f7fa); /* Light gradient */
+            color: #333; 
+            text-align: center; 
+        }
+
+        #controls { 
+            padding: 20px; 
+            background-color: white; 
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1); 
+            margin-bottom: 10px; 
+            border-radius: 5px; 
+        }
+        h1 { 
+            margin-bottom: 20px; 
+        }
+        #output { 
+            margin-top: 10px; 
+            font-size: 16px; 
+            font-weight: bold; 
+            background-color: #e7f3ff; 
+            padding: 15px; 
+            border: 1px solid #007bff; 
+            border-radius: 5px; 
+            display: inline-block; 
+        }
+        input[type="text"] {
+            width: calc(100% - 22px); 
+            max-width: 300px; 
+            padding: 10px; 
+            border: 1px solid #ccc; 
+            border-radius: 5px; 
+            margin-bottom: 10px; 
+            font-size: 16px; 
+            text-align: center; 
+        }
+        input[type="text"]:focus {
+            border-color: #007bff; 
+            outline: none; 
+        }
+        button { 
+            padding: 10px 35px; 
+            background-color: #007bff; 
+            color: white; 
+            border: none; 
+            border-radius: 5px; 
+            font-size: 16px; 
+            cursor: pointer; 
+            transition: background-color 0.3s; 
+            display: block; 
+            margin: 0 auto; 
+        }
+        button:hover { 
+            background-color: #0056b3; 
+        }
+        .toggle-button { 
+            margin: 15px 35px; 
+            cursor: pointer; 
+            color: white; 
+            background-color: #007bff; 
+            border: none; 
+            padding: 10px 15px; 
+            border-radius: 5px; 
+            font-size: 16px; 
+            transition: background-color 0.3s; 
+            display: block; 
+            margin: 10px;
+        }
+        .toggle-button:hover {
+            background-color: #0056b3; 
+        }
+        .places-list-container { 
+            display: flex; 
+            justify-content: center; 
+            margin-top: 10px; 
+        }
+        .places-list { 
+            margin: 0 10px; 
+            padding: 10px; 
+            border: 1px solid #007bff; 
+            border-radius: 5px; 
+            background-color: #f8f9fa; 
+            max-height: 200px; 
+            overflow-y: auto; 
+            text-align: left; 
+            width: 200px; 
+        }
+        .places-list h2 { 
+            margin: 0 0 5px; 
+            font-size: 18px; 
+            text-align: center; 
+        }
+        .places-list p { 
+            margin: 5px 0; 
+            font-size: 14px; 
+            padding: 5px; 
+            border-bottom: 1px solid #ccc; 
+        }
+        .places-list p:last-child {
+            border-bottom: none; 
+        }
+        .hidden { display: none; }
+        #map-container { 
+            width: 100%; 
+            max-width: 800px; 
+            margin: 0 auto; 
+            border: 2px solid #007bff; 
+            border-radius: 5px; 
+            overflow: hidden; 
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2); 
+            background-color: white; 
+        }
+        #map { 
+            width: 100%; 
+            height: 500px; 
+        }
+    </style>
+</head>
+<body>
+
+    <div id="controls">
+        <h1>Shortest Route Finder with Toll Information</h1>
+        <input type="text" id="start-location" placeholder="Start Location" />
+        <input type="text" id="dest-location" placeholder="Destination Location" />
+        <button id="find-route">Find Route</button>
+        <div id="output"></div>
+        
+        <div id="nearby-places">
+            <div class="places-list-container">
+                <div>
+                    <button class="toggle-button" id="toggle-hospitals">Show Nearby Hospitals</button>
+                    <div class="places-list hidden" id="hospitals-list"></div>
+                </div>
+                <div>
+                    <button class="toggle-button" id="toggle-restaurants">Show Nearby Restaurants</button>
+                    <div class="places-list hidden" id="restaurants-list"></div>
+                </div>
+                <div>
+                    <button class="toggle-button" id="toggle-tolls">Show Nearby Tolls</button>
+                    <div class="places-list hidden" id="tolls-list"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div id="map-container">
+        <div id="map"></div>
+    </div>
+
+<script src="https://api.mapbox.com/mapbox-gl-js/v2.9.1/mapbox-gl.js"></script>
+<script>
+    mapboxgl.accessToken = 'pk.eyJ1IjoiaXRzc2FyYW5oZXJlIiwiYSI6ImNtMmxucWl3ZTBjeGQycXNnZjV1dmZxeTEifQ.otCT7alqAGTe8l6l0fjGKQ';
+    const map = new mapboxgl.Map({
+        container: 'map',
+        style: 'mapbox://styles/mapbox/streets-v11',
+        center: [77.5946, 12.9716], 
+        zoom: 12
+    });
+
+    map.on('load', () => {
+        if (!map.getSource('route')) {
+            map.addSource('route', {
+                type: 'geojson',
+                data: {
+                    type: 'FeatureCollection',
+                    features: []
+                }
+            });
+        }
+
+        if (!map.getLayer('route')) {
+            map.addLayer({
+                id: 'route',
+                type: 'line',
+                source: 'route',
+                layout: {
+                    'line-join': 'round',
+                    'line-cap': 'round'
+                },
+                paint: {
+                    'line-color': '#888',
+                    'line-width': 8
+                }
+            });
+        }
+    });
+
+    document.getElementById('find-route').addEventListener('click', async () => {
+        const startLocation = document.getElementById('start-location').value;
+        const destLocation = document.getElementById('dest-location').value;
+
+        const response = await fetch('/find-route', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ start_location: startLocation, dest_location: destLocation })
+        });
+
+        if (response.ok) {
+            const data = await response.json();
+            console.log(data); 
+
+            if (!data.route || !data.route.coordinates) {
+                alert('Route data not found.');
+                return;
+            }
+
+            document.getElementById('output').innerHTML = 
+                `Distance: ${data.distance} <br>Duration: ${data.duration} `;
+
+            
+        const startCoords = data.route.coordinates[0]; 
+        map.flyTo({
+            center: startCoords,
+            zoom: 5, 
+            essential: true 
+        });
+
+        
+        new mapboxgl.Marker()
+            .setLngLat(startCoords)
+            .addTo(map);
+
+        const endCoords = data.route.coordinates[data.route.coordinates.length - 1]; 
+        new mapboxgl.Marker({ color: 'red' }) 
+            .setLngLat(endCoords)
+            .addTo(map);
+
+            const routeData = {
+                type: 'Feature',
+                geometry: {
+                    type: 'LineString',
+                    coordinates: data.route.coordinates
+                }
+            };
+
+            map.getSource('route').setData(routeData);
+
+            
+            const hospitalsList = document.getElementById('hospitals-list');
+            hospitalsList.innerHTML = ''; 
+            if (data.nearby_hospitals && Array.isArray(data.nearby_hospitals)) {
+                data.nearby_hospitals.forEach(hospital => {
+                    hospitalsList.innerHTML += `<p>${hospital.text}</p>`;
+                });
+            } else {
+                hospitalsList.innerHTML = '<p>No hospitals found.</p>';
+            }
+
+            
+            const restaurantsList = document.getElementById('restaurants-list');
+            restaurantsList.innerHTML = ''; 
+            if (data.nearby_restaurants && Array.isArray(data.nearby_restaurants)) {
+                data.nearby_restaurants.forEach(restaurant => {
+                    restaurantsList.innerHTML += `<p>${restaurant.text}</p>`;
+                });
+            } else {
+                restaurantsList.innerHTML = '<p>No restaurants found.</p>';
+            }
+
+            
+            const tollsList = document.getElementById('tolls-list');
+            tollsList.innerHTML = ''; 
+
+            if (data.nearby_tolls && Array.isArray(data.nearby_tolls)) {
+                const distinctTolls = new Set(); 
+                data.nearby_tolls.forEach(toll => {
+                    distinctTolls.add(toll.text); 
+                });
+
+                
+                distinctTolls.forEach(tollName => {
+                    tollsList.innerHTML += `<p>${tollName}</p>`;
+                });
+            } else {
+                tollsList.innerHTML = '<p>No tolls found.</p>';
+            }
+
+        } else {
+            const errorData = await response.json();
+            alert(errorData.error);
+        }
+    });
+
+    document.getElementById('toggle-hospitals').addEventListener('click', () => {
+        const hospitalsList = document.getElementById('hospitals-list');
+        hospitalsList.classList.toggle('hidden');
+    });
+
+    document.getElementById('toggle-restaurants').addEventListener('click', () => {
+        const restaurantsList = document.getElementById('restaurants-list');
+        restaurantsList.classList.toggle('hidden');
+    });
+
+    document.getElementById('toggle-tolls').addEventListener('click', () => {
+        const tollsList = document.getElementById('tolls-list');
+        tollsList.classList.toggle('hidden');
+    });
+</script>
+
+</body>
+</html>
